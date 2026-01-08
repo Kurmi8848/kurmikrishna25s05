@@ -1,95 +1,123 @@
-// --- 設定 ---
-const MOLE_IMAGE_URL = 'mole.png'; // あなたの画像ファイル名に変更してください
-const GAME_TIME = 30; // 制限時間（秒）
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const startBtn = document.getElementById("start-btn");
+const speedSelect = document.getElementById("speed-select");
+const ngDisplay = document.getElementById("ng-count");
+const scoreDisplay = document.getElementById("score");
 
-// --- 要素の取得 ---
-const board = document.querySelector('.game-board');
-const scoreDisplay = document.getElementById('score');
-const timerDisplay = document.getElementById('timer');
-const startBtn = document.getElementById('start-btn');
-const speedSelect = document.getElementById('speed');
+// 画像の設定（ファイルがない場合は色で描画します）
+const racketImg = new Image();
+racketImg.src = 'racket.png'; 
+const ballImg = new Image();
+ballImg.src = 'ball.png';
 
 let score = 0;
-let timeLeft = GAME_TIME;
-let gameTimer = null;
-let moleTimer = null;
-let currentMole = null;
+let ngCount = 0;
+let gameRunning = false;
 
-// 1. 3x3のマス（穴）を生成
-for (let i = 0; i < 9; i++) {
-    const hole = document.createElement('div');
-    hole.classList.add('hole');
-    
-    const mole = document.createElement('img');
-    mole.src = MOLE_IMAGE_URL;
-    mole.classList.add('mole');
-    
-    // もぐらをクリックした時の処理
-    mole.addEventListener('mousedown', whack);
-    
-    hole.appendChild(mole);
-    board.appendChild(hole);
+// ラケットの設定
+const paddleHeight = 15;
+const paddleWidth = 100;
+let paddleX = (canvas.width - paddleWidth) / 2;
+
+// ボールの設定
+let x, y, dx, dy;
+const ballRadius = 10;
+
+// キー入力フラグ
+let rightPressed = false;
+let leftPressed = false;
+
+document.addEventListener("keydown", (e) => {
+    if(e.key === "Right" || e.key === "ArrowRight") rightPressed = true;
+    else if(e.key === "Left" || e.key === "ArrowLeft") leftPressed = true;
+});
+document.addEventListener("keyup", (e) => {
+    if(e.key === "Right" || e.key === "ArrowRight") rightPressed = false;
+    else if(e.key === "Left" || e.key === "ArrowLeft") leftPressed = false;
+});
+
+function initBall() {
+    x = canvas.width / 2;
+    y = 50;
+    const speed = parseInt(speedSelect.value);
+    dx = speed * (Math.random() > 0.5 ? 1 : -1);
+    dy = speed;
 }
 
-const moles = document.querySelectorAll('.mole');
+function drawBall() {
+    if (ballImg.complete && ballImg.naturalWidth !== 0) {
+        ctx.drawImage(ballImg, x - ballRadius, y - ballRadius, ballRadius * 2, ballRadius * 2);
+    } else {
+        ctx.beginPath();
+        ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
+        ctx.fillStyle = "#e74c3c";
+        ctx.fill();
+        ctx.closePath();
+    }
+}
 
-function startGame() {
-    // リセット
+function drawPaddle() {
+    if (racketImg.complete && racketImg.naturalWidth !== 0) {
+        ctx.drawImage(racketImg, paddleX, canvas.height - paddleHeight - 10, paddleWidth, paddleHeight);
+    } else {
+        ctx.beginPath();
+        ctx.rect(paddleX, canvas.height - paddleHeight - 10, paddleWidth, paddleHeight);
+        ctx.fillStyle = "#3498db";
+        ctx.fill();
+        ctx.closePath();
+    }
+}
+
+function update() {
+    if (!gameRunning) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawBall();
+    drawPaddle();
+
+    // 壁との衝突（左右）
+    if (x + dx > canvas.width - ballRadius || x + dx < ballRadius) dx = -dx;
+    // 天井との衝突
+    if (y + dy < ballRadius) dy = -dy;
+    
+    // ラケットとの衝突判定
+    if (y + dy > canvas.height - paddleHeight - 20) {
+        if (x > paddleX && x < paddleX + paddleWidth) {
+            dy = -dy;
+            score++;
+            scoreDisplay.textContent = score;
+        } else if (y + dy > canvas.height) {
+            // ミス（NG）
+            ngCount++;
+            ngDisplay.textContent = ngCount;
+            if (ngCount >= 10) {
+                alert("ゲームオーバー！ スコア: " + score);
+                gameRunning = false;
+                startBtn.disabled = false;
+            } else {
+                initBall();
+            }
+        }
+    }
+
+    // ラケットの移動
+    if (rightPressed && paddleX < canvas.width - paddleWidth) paddleX += 7;
+    else if (leftPressed && paddleX > 0) paddleX -= 7;
+
+    x += dx;
+    y += dy;
+
+    if (gameRunning) requestAnimationFrame(update);
+}
+
+startBtn.addEventListener("click", () => {
     score = 0;
-    timeLeft = GAME_TIME;
+    ngCount = 0;
     scoreDisplay.textContent = score;
-    timerDisplay.textContent = timeLeft;
+    ngDisplay.textContent = ngCount;
     startBtn.disabled = true;
-
-    // カウントダウン開始
-    gameTimer = setInterval(() => {
-        timeLeft--;
-        timerDisplay.textContent = timeLeft;
-        if (timeLeft <= 0) endGame();
-    }, 1000);
-
-    showMole();
-}
-
-function showMole() {
-    if (timeLeft <= 0) return;
-
-    // 全てのもぐらを一度隠す
-    moles.forEach(m => m.classList.remove('up'));
-
-    // ランダムに1つ選ぶ
-    const randomIndex = Math.floor(Math.random() * moles.length);
-    const mole = moles[randomIndex];
-    
-    mole.classList.add('up');
-    currentMole = mole;
-
-    // 選択した難易度の時間だけ表示
-    const displayTime = parseInt(speedSelect.value);
-    moleTimer = setTimeout(() => {
-        mole.classList.remove('up');
-        if (timeLeft > 0) showMole(); // 次のもぐらへ
-    }, displayTime);
-}
-
-function whack() {
-    if (!this.classList.contains('up')) return; // 出ていない時は無効
-
-    score++;
-    scoreDisplay.textContent = score;
-    this.classList.remove('up'); // 叩いたらすぐ隠す
-    
-    // 次のもぐら出現を少し早めるためのリセット
-    clearTimeout(moleTimer);
-    setTimeout(showMole, 100);
-}
-
-function endGame() {
-    clearInterval(gameTimer);
-    clearTimeout(moleTimer);
-    moles.forEach(m => m.classList.remove('up'));
-    alert(`タイムアップ！ スコア：${score}`);
-    startBtn.disabled = false;
-}
-
-startBtn.addEventListener('click', startGame);
+    gameRunning = true;
+    initBall();
+    update();
+});
