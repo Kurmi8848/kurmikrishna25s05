@@ -1,0 +1,95 @@
+// --- 設定 ---
+const MOLE_IMAGE_URL = 'mole.png'; // あなたの画像ファイル名に変更してください
+const GAME_TIME = 30; // 制限時間（秒）
+
+// --- 要素の取得 ---
+const board = document.querySelector('.game-board');
+const scoreDisplay = document.getElementById('score');
+const timerDisplay = document.getElementById('timer');
+const startBtn = document.getElementById('start-btn');
+const speedSelect = document.getElementById('speed');
+
+let score = 0;
+let timeLeft = GAME_TIME;
+let gameTimer = null;
+let moleTimer = null;
+let currentMole = null;
+
+// 1. 3x3のマス（穴）を生成
+for (let i = 0; i < 9; i++) {
+    const hole = document.createElement('div');
+    hole.classList.add('hole');
+    
+    const mole = document.createElement('img');
+    mole.src = MOLE_IMAGE_URL;
+    mole.classList.add('mole');
+    
+    // もぐらをクリックした時の処理
+    mole.addEventListener('mousedown', whack);
+    
+    hole.appendChild(mole);
+    board.appendChild(hole);
+}
+
+const moles = document.querySelectorAll('.mole');
+
+function startGame() {
+    // リセット
+    score = 0;
+    timeLeft = GAME_TIME;
+    scoreDisplay.textContent = score;
+    timerDisplay.textContent = timeLeft;
+    startBtn.disabled = true;
+
+    // カウントダウン開始
+    gameTimer = setInterval(() => {
+        timeLeft--;
+        timerDisplay.textContent = timeLeft;
+        if (timeLeft <= 0) endGame();
+    }, 1000);
+
+    showMole();
+}
+
+function showMole() {
+    if (timeLeft <= 0) return;
+
+    // 全てのもぐらを一度隠す
+    moles.forEach(m => m.classList.remove('up'));
+
+    // ランダムに1つ選ぶ
+    const randomIndex = Math.floor(Math.random() * moles.length);
+    const mole = moles[randomIndex];
+    
+    mole.classList.add('up');
+    currentMole = mole;
+
+    // 選択した難易度の時間だけ表示
+    const displayTime = parseInt(speedSelect.value);
+    moleTimer = setTimeout(() => {
+        mole.classList.remove('up');
+        if (timeLeft > 0) showMole(); // 次のもぐらへ
+    }, displayTime);
+}
+
+function whack() {
+    if (!this.classList.contains('up')) return; // 出ていない時は無効
+
+    score++;
+    scoreDisplay.textContent = score;
+    this.classList.remove('up'); // 叩いたらすぐ隠す
+    
+    // 次のもぐら出現を少し早めるためのリセット
+    clearTimeout(moleTimer);
+    setTimeout(showMole, 100);
+}
+
+function endGame() {
+    clearInterval(gameTimer);
+    clearTimeout(moleTimer);
+    moles.forEach(m => m.classList.remove('up'));
+    alert(`タイムアップ！ スコア：${score}`);
+    startBtn.disabled = false;
+}
+
+startBtn.addEventListener('click', startGame);
